@@ -97,7 +97,7 @@ export function Lista({
             </div>
           </form>
         ) : (
-          <Botao variante="suave" className="botao-bloco" icone="mais" onClick={() => setNovo(true)}>Adicionar cartão</Botao>
+          <Botao variante="suave" className="botao-bloco botao-neon" icone="mais" onClick={() => setNovo(true)}>Adicionar cartão</Botao>
         )}
       </div>
     </section>

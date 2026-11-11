@@ -248,6 +248,11 @@ svg { flex: none; }
 .botao-primario { background: var(--oceano); border-color: var(--oceano); color: #fff; }
 .botao-primario:hover:not(:disabled) { background: var(--oceano-escuro); border-color: var(--oceano-escuro); }
 
+.botao-neon { background: #00ff66; border-color: #00cc52; color: #0b2211; font-weight: 700; }
+.botao-neon:hover:not(:disabled) { background: #00e65c; border-color: #00b347; }
+:root[data-tema="escuro"] .botao-neon { background: #00ff66; border-color: #00ff66; color: #0b2211; }
+:root[data-tema="escuro"] .botao-neon:hover:not(:disabled) { background: #00e65c; border-color: #00e65c; }
+
 .botao-perigo { color: var(--perigo); background: transparent; border-color: transparent; }
 .botao-perigo:hover:not(:disabled) { background: var(--perigo-fraco); }
 
