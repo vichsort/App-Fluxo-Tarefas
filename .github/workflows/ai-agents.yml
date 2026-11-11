@@ -1,0 +1,91 @@
+name: ai-agents
+
+# Atendimento via GitHub Actions com a API de IA do próprio dono do repositório (sem Copilot).
+# Liga com a variável de repositório AGENT_RUNTIME=github-actions. AGENT_DRY_RUN (variável) fica "true"
+# até o ensaio: simula o coordenador sem chamar a IA. Roda sempre a partir da main e nunca executa código
+# de PR nem código gerado. AI_API_KEY só existe no passo que chama o provedor.
+#
+# O backend dispara este workflow (workflow_dispatch) depois de criar a issue, porque eventos feitos com o
+# GITHUB_TOKEN das Actions não iniciam outros workflows. O evento `issues` fica como reforço: a execução
+# repetida é inofensiva, pois o estado da issue é relido antes de qualquer chamada à IA.
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Número da issue do ticket
+        required: true
+      retomar:
+        description: Repetir depois de uma execução incerta (pode consumir a API da IA de novo)
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: ai-agents-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: false
+
+jobs:
+  coordenar:
+    if: vars.AGENT_RUNTIME == 'github-actions' && (github.event_name != 'issues' || contains(github.event.issue.labels.*.name, 'origin:app'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Preparar (valida a issue e relê o estado)
+        id: preparar
+        run: node automacao/actions-controlador.mjs preparar
+        env:
+          REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_INPUT: ${{ inputs.issue_number }}
+          RETOMAR_INPUT: ${{ inputs.retomar }}
+          AGENT_ISSUE_AUTHOR: ${{ vars.AGENT_ISSUE_AUTHOR || github.repository_owner }}
+
+      - name: Coordenar (única chamada à IA; sem credencial do GitHub)
+        id: coordenar
+        if: steps.preparar.outputs.chamar == 'true'
+        timeout-minutes: 3
+        run: node automacao/actions-coordenar.mjs
+        env:
+          AGENT_DRY_RUN: ${{ vars.AGENT_DRY_RUN || 'true' }}
+          AI_PROVIDER: ${{ vars.AI_PROVIDER }}
+          AI_MODEL: ${{ vars.AI_MODEL }}
+          AI_BASE_URL: ${{ vars.AI_BASE_URL }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+
+      - name: Publicar (valida o relatório fora do modelo)
+        id: publicar
+        if: steps.preparar.outputs.chamar == 'true' && steps.coordenar.outcome == 'success'
+        run: node automacao/actions-controlador.mjs publicar
+        env:
+          REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AGENT_DRY_RUN: ${{ vars.AGENT_DRY_RUN || 'true' }}
+
+      - name: Registrar incerteza (a IA pode ou não ter sido chamada)
+        if: failure() && steps.preparar.outputs.chamar == 'true' && steps.publicar.outcome != 'success'
+        run: node automacao/actions-controlador.mjs falhou
+        env:
+          REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Guardar o resultado (artifact; a fonte do estado é o comentário na issue)
+        if: steps.publicar.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultado-${{ steps.preparar.outputs.request_id }}
+          path: ${{ runner.temp }}/fluxo/resultado.json
+          retention-days: 7

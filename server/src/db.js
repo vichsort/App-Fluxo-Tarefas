@@ -78,6 +78,13 @@ const MIGRACOES = [
    INSERT INTO ticket_message (id, ticket_id, role, content, criado_em) VALUES
      ('msg-boas-vindas-1', 'ticket-boas-vindas', 'user', 'Oi! Como eu peço ajuda aqui dentro do Fluxo?', '2026-11-10T10:00:00.000Z'),
      ('msg-boas-vindas-2', 'ticket-boas-vindas', 'agent', 'Olá! Cada ticket é uma conversa. Abra um novo ticket pelo botão "Novo ticket", descreva o que precisa e continue a conversa por aqui.', '2026-11-10T10:00:05.000Z');`,
+  // Atendimento nativo (GitHub): dono (usuário logado, se houver), issue, requestId, PR, fase e mensagens já enviadas.
+  `ALTER TABLE ticket ADD COLUMN dono_id TEXT;
+   ALTER TABLE ticket ADD COLUMN issue_number INTEGER;
+   ALTER TABLE ticket ADD COLUMN request_id TEXT;
+   ALTER TABLE ticket ADD COLUMN pr_number INTEGER;
+   ALTER TABLE ticket ADD COLUMN fase TEXT;
+   ALTER TABLE ticket ADD COLUMN eventos TEXT NOT NULL DEFAULT '[]'`,
 ];
 
 /** `caminho` = arquivo do banco; `:memory:` nos testes. */

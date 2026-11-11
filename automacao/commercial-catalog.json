@@ -1,0 +1,21 @@
+{
+  "produto": "Fluxo",
+  "descricao": "Quadro de tarefas no estilo Trello (quadros, listas e cartões) com área de atendimento por tickets.",
+  "precos": null,
+  "planos": null,
+  "prazos": null,
+  "recursos_disponiveis": [
+    "Quadros, listas e cartões com criar, renomear, editar e excluir",
+    "Mover cartões arrastando ou pelo menu 'Mover para'",
+    "Descrição nos cartões",
+    "Atendimento por tickets em formato de conversa"
+  ],
+  "recursos_indisponiveis": [
+    "Login e contas na interface",
+    "Compartilhamento de quadros",
+    "Notificações",
+    "Anexos",
+    "Aplicativo de celular"
+  ],
+  "observacao": "Preços, planos e prazos não foram definidos: não responda valores nem datas, encaminhe a uma pessoa."
+}

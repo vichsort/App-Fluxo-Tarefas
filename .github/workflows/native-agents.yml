@@ -1,0 +1,46 @@
+name: native-agents
+
+# Atendimento nativo: atribui tickets do app (issues origin:app) ao Copilot com o agent `coordenador`.
+# Roda só a partir da main e nunca executa código de PR: pull_request_target usa o workflow da main
+# e o checkout abaixo é sempre da main. Ligue com a variável de repositório AGENT_RUNTIME=github-native
+# e mantenha AGENT_DRY_RUN=true (padrão) até o ensaio.
+on:
+  issues:
+    types: [opened, labeled]
+  pull_request_target:
+    types: [opened, ready_for_review, closed]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Número da issue para retomar (o controlador relê o estado e não repete o que já foi feito)
+        required: true
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: native-agents-${{ github.event.issue.number || github.event.pull_request.number || inputs.issue_number }}
+  cancel-in-progress: false
+
+jobs:
+  controlar:
+    if: vars.AGENT_RUNTIME == 'github-native'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node automacao/controlador.mjs
+        env:
+          REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COPILOT_AGENT_TOKEN: ${{ secrets.COPILOT_AGENT_TOKEN }}
+          AGENT_DRY_RUN: ${{ vars.AGENT_DRY_RUN || 'true' }}
+          AGENT_ISSUE_AUTHOR: ${{ vars.AGENT_ISSUE_AUTHOR || github.repository_owner }}
+          ISSUE_INPUT: ${{ inputs.issue_number }}
