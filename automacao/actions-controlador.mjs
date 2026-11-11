@@ -108,7 +108,9 @@ export async function publicar(env = process.env) {
   const dados = JSON.parse(readFileSync(join(pasta, "entrada.json"), "utf8"));
   let bruto = null;
   try { bruto = JSON.parse(readFileSync(join(pasta, "saida.json"), "utf8")).relatorio; } catch { /* vira human-review abaixo */ }
-  const v = validarRelatorio(bruto, { requestId: dados.requestId, segredos: [token] });
+  let v = validarRelatorio(bruto, { requestId: dados.requestId, segredos: [token] });
+  // Nas Actions a rodada é única: `working` deixaria o ticket parado para sempre, então vai para uma pessoa.
+  if (v.ok && v.relatorio.outcome === "working") v = { ok: false, motivo: "outcome working não é final nesta execução" };
   const relatorio = v.ok ? v.relatorio : {
     requestId: dados.requestId, outcome: "human-review",
     publicText: "Recebemos seu pedido e ele será analisado por uma pessoa da equipe.",
