@@ -57,3 +57,12 @@ Substitui o caminho Copilot acima quando `AGENT_RUNTIME=github-actions`. O `nati
 4. **Label:** criar `origin:app` no repositório se ainda não existir (o GitHub cria ao usar em issue de quem tem permissão, mas confira).
 5. **Ordem:** os arquivos novos precisam estar na `main` do GitHub (commit e push) antes do ensaio.
 6. **Para abrir PR no futuro:** Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests" (hoje as permissões padrão do repositório são só leitura e essa opção está desligada).
+
+## Etapa 04: provedor GitHub Models (gratuito)
+
+- **Provedor:** `AI_PROVIDER=github-models` implementado em `automacao/actions-coordenar.mjs` (API `https://models.github.ai/inference/chat/completions`, modelo padrão `openai/gpt-4o-mini`, trocável por `AI_MODEL`). Prompt atual: ~9 mil caracteres, dentro do limite do nível gratuito.
+- **Sem segredo de IA:** o workflow `ai-agents.yml` agora tem jobs separados (`preparar` → `coordenar` → `publicar`, mais `registrar-incerteza`). Só o `coordenar` fala com a IA, e o token dele tem apenas `models: read` (não lê nem escreve issues). Os jobs com escrita na issue nunca recebem a chave. `entrada.json`/`saida.json` passam por artifacts da execução.
+- **Backend:** lê `.env` na raiz se existir (modelo em `.env.example`; o ambiente tem prioridade).
+- **Conferido localmente:** chamada simulada ao GitHub Models (`server/test/coordenar.test.js`), `npm test` e `npm run build`. **Não conferido:** o workflow ainda não rodou no GitHub.
+- **Configurar no repositório:** variáveis `AGENT_RUNTIME=github-actions`, `AI_PROVIDER=github-models`, `AGENT_DRY_RUN=true` no ensaio e `false` depois. `AI_API_KEY` não é necessário.
+- **Limite conhecido:** só a primeira mensagem do ticket vai para o atendimento; respostas seguintes no mesmo ticket ainda não disparam nova rodada.

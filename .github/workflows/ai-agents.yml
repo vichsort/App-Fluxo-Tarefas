@@ -3,7 +3,11 @@ name: ai-agents
 # Atendimento via GitHub Actions com a API de IA do próprio dono do repositório (sem Copilot).
 # Liga com a variável de repositório AGENT_RUNTIME=github-actions. AGENT_DRY_RUN (variável) fica "true"
 # até o ensaio: simula o coordenador sem chamar a IA. Roda sempre a partir da main e nunca executa código
-# de PR nem código gerado. AI_API_KEY só existe no passo que chama o provedor.
+# de PR nem código gerado. AI_API_KEY só existe no job que chama o provedor.
+#
+# AI_PROVIDER=github-models (gratuito, sem segredo): o job `coordenar` usa o próprio GITHUB_TOKEN, mas com
+# apenas `models: read`; ele não lê nem escreve issues. Os jobs com escrita na issue nunca recebem a chave da IA.
+# Os jobs trocam entrada.json/saida.json por artifacts desta execução.
 #
 # O backend dispara este workflow (workflow_dispatch) depois de criar a issue, porque eventos feitos com o
 # GITHUB_TOKEN das Actions não iniciam outros workflows. O evento `issues` fica como reforço: a execução
@@ -28,13 +32,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  coordenar:
+  preparar:
     if: vars.AGENT_RUNTIME == 'github-actions' && (github.event_name != 'issues' || contains(github.event.issue.labels.*.name, 'origin:app'))
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     permissions:
       contents: read
       issues: write
+    outputs:
+      chamar: ${{ steps.preparar.outputs.chamar }}
+      request_id: ${{ steps.preparar.outputs.request_id }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -54,9 +61,37 @@ jobs:
           RETOMAR_INPUT: ${{ inputs.retomar }}
           AGENT_ISSUE_AUTHOR: ${{ vars.AGENT_ISSUE_AUTHOR || github.repository_owner }}
 
-      - name: Coordenar (única chamada à IA; sem credencial do GitHub)
-        id: coordenar
+      - name: Entregar a entrada ao job da IA
         if: steps.preparar.outputs.chamar == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: entrada
+          path: ${{ runner.temp }}/fluxo/entrada.json
+          retention-days: 1
+          overwrite: true
+
+  coordenar:
+    needs: preparar
+    if: needs.preparar.outputs.chamar == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      models: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: entrada
+          path: ${{ runner.temp }}/fluxo
+
+      - name: Coordenar (única chamada à IA; token só com models:read)
         timeout-minutes: 3
         run: node automacao/actions-coordenar.mjs
         env:
@@ -64,28 +99,78 @@ jobs:
           AI_PROVIDER: ${{ vars.AI_PROVIDER }}
           AI_MODEL: ${{ vars.AI_MODEL }}
           AI_BASE_URL: ${{ vars.AI_BASE_URL }}
-          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_API_KEY: ${{ vars.AI_PROVIDER == 'github-models' && github.token || secrets.AI_API_KEY }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: saida
+          path: ${{ runner.temp }}/fluxo/saida.json
+          retention-days: 1
+          overwrite: true
+
+  publicar:
+    needs: [preparar, coordenar]
+    if: needs.coordenar.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: entrada
+          path: ${{ runner.temp }}/fluxo
+      - uses: actions/download-artifact@v4
+        with:
+          name: saida
+          path: ${{ runner.temp }}/fluxo
 
       - name: Publicar (valida o relatório fora do modelo)
-        id: publicar
-        if: steps.preparar.outputs.chamar == 'true' && steps.coordenar.outcome == 'success'
         run: node automacao/actions-controlador.mjs publicar
         env:
           REPO: ${{ github.repository }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AGENT_DRY_RUN: ${{ vars.AGENT_DRY_RUN || 'true' }}
 
+      - name: Guardar o resultado (artifact; a fonte do estado é o comentário na issue)
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultado-${{ needs.preparar.outputs.request_id }}
+          path: ${{ runner.temp }}/fluxo/resultado.json
+          retention-days: 7
+          overwrite: true
+
+  registrar-incerteza:
+    needs: [preparar, coordenar, publicar]
+    if: always() && needs.preparar.outputs.chamar == 'true' && needs.publicar.result != 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: entrada
+          path: ${{ runner.temp }}/fluxo
+
       - name: Registrar incerteza (a IA pode ou não ter sido chamada)
-        if: failure() && steps.preparar.outputs.chamar == 'true' && steps.publicar.outcome != 'success'
         run: node automacao/actions-controlador.mjs falhou
         env:
           REPO: ${{ github.repository }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Guardar o resultado (artifact; a fonte do estado é o comentário na issue)
-        if: steps.publicar.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: resultado-${{ steps.preparar.outputs.request_id }}
-          path: ${{ runner.temp }}/fluxo/resultado.json
-          retention-days: 7

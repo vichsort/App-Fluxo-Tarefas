@@ -1,5 +1,5 @@
 // Passo "coordenar" do workflow ai-agents.yml: a ÚNICA chamada ao modelo. Este passo recebe AI_API_KEY
-// e não recebe nenhuma credencial do GitHub. Lê entrada.json e escreve saida.json; quem valida e publica é outro passo.
+// e nenhuma credencial do GitHub com escrita (com AI_PROVIDER=github-models, a chave é o token de um job só com `models: read`). Lê entrada.json e escreve saida.json; quem valida e publica é outro passo.
 // AGENT_DRY_RUN != "false": simula o resultado com dados fictícios e não chama a API da IA.
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -45,7 +45,32 @@ export const simularRelatorio = ({ requestId }) => ({
 
 // Preencher quando o provedor for definido: cada chave é o valor de AI_PROVIDER e a função recebe
 // ({ sistema, usuario }, { modelo, baseUrl, chave, sinal }) e devolve o texto JSON da resposta. Não presumimos compatibilidade entre APIs.
-const PROVEDORES = {};
+const PROVEDORES = {
+  // GitHub Models (API de chat no formato OpenAI). Nas Actions a chave é o GITHUB_TOKEN de um job que só tem
+  // `models: read`; o nível gratuito tem limite de pedidos por dia e de ~8 mil tokens de entrada por pedido.
+  "github-models": async ({ sistema, usuario }, { modelo, baseUrl, chave, sinal }) => {
+    const r = await fetch(`${baseUrl ?? "https://models.github.ai/inference"}/chat/completions`, {
+      method: "POST",
+      headers: { accept: "application/json", "content-type": "application/json", authorization: `Bearer ${chave}` },
+      body: JSON.stringify({
+        model: modelo || MODELO_PADRAO_GITHUB,
+        messages: [{ role: "system", content: sistema }, { role: "user", content: usuario }],
+        temperature: 0.2,
+        max_tokens: 2000,
+      }),
+      signal: sinal,
+    });
+    if (!r.ok) throw new Error(`GitHub Models respondeu ${r.status}`); // sem chave nem corpo na mensagem
+    const conteudo = (await r.json())?.choices?.[0]?.message?.content;
+    if (typeof conteudo !== "string") throw new Error("GitHub Models não devolveu texto.");
+    return semCercaDeCodigo(conteudo);
+  },
+};
+
+export const MODELO_PADRAO_GITHUB = "openai/gpt-4o-mini";
+
+/** Alguns modelos embrulham o JSON em ```json ... ```; tira só essa cerca, o resto segue para a validação. */
+export const semCercaDeCodigo = (t) => t.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, "$1").trim();
 
 async function chamarModelo(prompt, cfg) {
   const chamar = PROVEDORES[cfg.provedor];
