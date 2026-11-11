@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Botao } from "./componentes/Botao.jsx";
 import { Campo } from "./componentes/Campo.jsx";
 import { Icone } from "./componentes/Icone.jsx";
@@ -25,6 +25,20 @@ export function TelaQuadro({
   const [listaAlvo, setListaAlvo] = useState(null);
   const [novaLista, setNovaLista] = useState(false);
   const [tituloLista, setTituloLista] = useState("");
+  const [modoEscuro, setModoEscuro] = useState(() => {
+    const salvo = localStorage.getItem("fluxo_modo_escuro");
+    if (salvo !== null) return salvo === "true";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("fluxo_modo_escuro", modoEscuro);
+    if (modoEscuro) {
+      document.documentElement.setAttribute("data-tema", "escuro");
+    } else {
+      document.documentElement.removeAttribute("data-tema");
+    }
+  }, [modoEscuro]);
 
   const criarLista = (e) => {
     e.preventDefault();
@@ -50,6 +64,12 @@ export function TelaQuadro({
       <header className="quadro-topo">
         <h1 className="quadro-titulo">{board.title}</h1>
         <div className="quadro-acoes">
+          <Botao
+            variante="fantasma"
+            icone={modoEscuro ? "sol" : "lua"}
+            aria-label="Alternar modo escuro"
+            onClick={() => setModoEscuro(!modoEscuro)}
+          />
           <Botao variante="fantasma" icone="lapis" aria-label="Renomear quadro" onClick={aoRenomearQuadro} />
           <Botao variante="fantasma" icone="lixeira" aria-label="Excluir quadro" onClick={aoExcluirQuadro} />
         </div>
