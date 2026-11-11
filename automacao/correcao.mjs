@@ -14,6 +14,7 @@ import { caminhoPermitido, contemSegredo, limpar } from "./relatorio.mjs";
 
 export const MAX_ENTRADA = 60_000; // caracteres dos arquivos no prompt (cabe estilos.css; o Gemini aceita bem mais)
 const MAX_EDICOES = 10;
+const TENTATIVAS_EDICAO = 3;
 
 const corpoDoAgente = (raiz) =>
   readFileSync(join(raiz, ".github", "agents", "desenvolvedor.agent.md"), "utf8").replace(/^---[\s\S]*?\n---\n/, "").trim();
@@ -77,8 +78,22 @@ export async function codificar(env = process.env, raiz = ".") {
   const entrada = lerJson(env, "entrada.json");
   const relatorio = lerJson(env, "resultado.json");
   if (relatorio.outcome !== "code" || relatorio.requestId !== entrada.requestId) throw new Error("não há correção a fazer");
-  const resposta = await chamarModelo(montarPromptCorrecao({ raiz, pedido: entrada.pedido, relatorio }), configDaIA(env));
-  const v = validarEdicoes(JSON.parse(resposta), { permitidos: relatorio.allowedFiles, ler: lerDoCheckout(raiz) });
+  const cfg = configDaIA(env);
+  const base = montarPromptCorrecao({ raiz, pedido: entrada.pedido, relatorio });
+  // Nada foi aplicado até a validação passar, então devolver o erro ao modelo e pedir de novo é seguro (no máximo 3 chamadas).
+  let v, erro;
+  for (let n = 1; n <= TENTATIVAS_EDICAO && !v; n++) {
+    const usuario = erro ? `${base.usuario}
+
+Sua resposta anterior foi rejeitada: ${erro}. Corrija e responda de novo só com o JSON.` : base.usuario;
+    try {
+      v = validarEdicoes(JSON.parse(await chamarModelo({ ...base, usuario }, cfg)), { permitidos: relatorio.allowedFiles, ler: lerDoCheckout(raiz) });
+    } catch (e) {
+      if (n === TENTATIVAS_EDICAO || e.status || e.name === "TimeoutError") throw e; // erro de API já foi repetido por chamarModelo; timeout não se repete às cegas
+      erro = limpar(e.message).slice(0, 200);
+      console.error(`Edições rejeitadas (${erro}); tentativa ${n + 1}/${TENTATIVAS_EDICAO}`);
+    }
+  }
   gravar(raiz, v.arquivos);
   writeFileSync(join(pasta(env), "edicoes.json"), JSON.stringify({ requestId: entrada.requestId, summary: v.summary, edits: v.edits }));
   console.log(`Correção aplicada no checkout: ${[...v.arquivos.keys()].join(", ")}.`);

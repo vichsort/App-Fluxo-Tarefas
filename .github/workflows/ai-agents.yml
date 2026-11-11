@@ -207,8 +207,8 @@ jobs:
       - name: Instalar dependências (antes de qualquer mudança da IA)
         run: npm ci
 
-      - name: Codificar (uma chamada à IA; sem credencial do GitHub)
-        timeout-minutes: 3
+      - name: Codificar (até 3 chamadas à IA se as edições forem rejeitadas; sem credencial do GitHub)
+        timeout-minutes: 6
         run: node automacao/correcao.mjs codificar
         env:
           AI_PROVIDER: ${{ vars.AI_PROVIDER }}
