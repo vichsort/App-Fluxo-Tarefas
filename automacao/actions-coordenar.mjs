@@ -5,9 +5,9 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const TIMEOUT_MS = 35_000; // por tentativa; 4 tentativas + esperas cabem nos 3 min do passo
+const TIMEOUT_MS = 35_000; // por tentativa, salvo cfg.timeoutMs (a correção usa modelo mais lento)
 const TENTATIVAS = 4;
-const ESPERA_MS = (n) => 2000 * 2 ** n; // 2 s, 4 s, 8 s
+const ESPERA_MS = (n) => 3000 * 2 ** n; // 3 s, 6 s, 12 s, 24 s, 48 s
 
 const corpoDoAgente = (arquivo) => readFileSync(arquivo, "utf8").replace(/^---[\s\S]*?\n---\n/, "").trim();
 
@@ -88,10 +88,10 @@ export async function chamarModelo(prompt, cfg) {
   // Qualquer outro erro (ou timeout, que pode ter sido consumido) sobe na hora, sem repetir às cegas.
   for (let n = 0; ; n++) {
     try {
-      return await chamar(prompt, { modelo: cfg.modelo, baseUrl: cfg.baseUrl, chave: cfg.chave, sinal: AbortSignal.timeout(TIMEOUT_MS) });
+      return await chamar(prompt, { modelo: cfg.modelo, baseUrl: cfg.baseUrl, chave: cfg.chave, sinal: AbortSignal.timeout(cfg.timeoutMs ?? TIMEOUT_MS) });
     } catch (e) {
-      if (![429, 500, 502, 503, 504].includes(e.status) || n >= TENTATIVAS - 1) throw e;
-      console.error(`${e.message}; nova tentativa ${n + 2}/${TENTATIVAS}`);
+      if (![429, 500, 502, 503, 504].includes(e.status) || n >= (cfg.tentativas ?? TENTATIVAS) - 1) throw e;
+      console.error(`${e.message}; nova tentativa ${n + 2}/${cfg.tentativas ?? TENTATIVAS}`);
       await new Promise((ok) => setTimeout(ok, ESPERA_MS(n)));
     }
   }

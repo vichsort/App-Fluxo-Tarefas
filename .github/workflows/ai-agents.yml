@@ -185,7 +185,7 @@ jobs:
     needs: [preparar, publicar]
     if: needs.publicar.outputs.outcome == 'code' && vars.AGENT_DRY_RUN == 'false'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -208,11 +208,12 @@ jobs:
         run: npm ci
 
       - name: Codificar (até 3 chamadas à IA se as edições forem rejeitadas; sem credencial do GitHub)
-        timeout-minutes: 6
+        timeout-minutes: 12
         run: node automacao/correcao.mjs codificar
         env:
           AI_PROVIDER: ${{ vars.AI_PROVIDER }}
           AI_MODEL: ${{ vars.AI_MODEL }}
+          AI_MODEL_CODIGO: ${{ vars.AI_MODEL_CODIGO }}
           AI_BASE_URL: ${{ vars.AI_BASE_URL }}
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
 

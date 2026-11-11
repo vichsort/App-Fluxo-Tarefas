@@ -78,7 +78,9 @@ export async function codificar(env = process.env, raiz = ".") {
   const entrada = lerJson(env, "entrada.json");
   const relatorio = lerJson(env, "resultado.json");
   if (relatorio.outcome !== "code" || relatorio.requestId !== entrada.requestId) throw new Error("não há correção a fazer");
-  const cfg = configDaIA(env);
+  // Código pode usar outro modelo (variável AI_MODEL_CODIGO); a resposta é longa, então o tempo por chamada é maior.
+  const cfg = { ...configDaIA(env), timeoutMs: 90_000, tentativas: 6 };
+  if (env.AI_MODEL_CODIGO) cfg.modelo = env.AI_MODEL_CODIGO;
   const base = montarPromptCorrecao({ raiz, pedido: entrada.pedido, relatorio });
   // Nada foi aplicado até a validação passar, então devolver o erro ao modelo e pedir de novo é seguro (no máximo 3 chamadas).
   let v, erro;
