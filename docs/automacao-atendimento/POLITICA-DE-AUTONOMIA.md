@@ -6,7 +6,7 @@ Vale para os agents em `.github/agents/*.agent.md` que respondem tickets. Fonte 
 
 1. **Responder dúvida de uso** com base em `PRODUTO.md`.
 2. **Pedir esclarecimento** com uma pergunta curta quando faltar informação.
-3. **Fazer pequena mudança no quadro de tarefas**, só no que o ticket pediu. O pedido precisa de: problema, resultado esperado e arquivos prováveis. Sem isso, pergunte.
+3. **Fazer mudança no quadro de tarefas** dentro dos caminhos de produto, só no que o ticket pediu. O PO deduz problema, resultado esperado e arquivos prováveis a partir do pedido e do contexto, registrando as suposições. Só pergunte quando não houver interpretação razoável.
 
 ## Caminhos de produto que podem mudar
 
