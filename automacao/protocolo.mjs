@@ -35,7 +35,8 @@ export const marcador = (tipo, dados) =>
 
 /** Procura marcadores de um tipo nos comentários feitos pelo robô das Actions; devolve os dados de cada um. */
 export function estadosDoRobo(comentarios, tipo) {
-  const re = new RegExp(`<!--\\s*fluxo:${tipo}\\s+([^>]*?)\\s*-->`);
+  // Só no INÍCIO do comentário: texto de fora (modelo/cliente) vem depois e não consegue forjar um marcador.
+  const re = new RegExp(`^\\s*<!--\\s*fluxo:${tipo}\\s+([^>]*?)\\s*-->`);
   return comentarios
     .filter((c) => c.user?.login === "github-actions[bot]")
     .map((c) => re.exec(c.body ?? "")?.[1])

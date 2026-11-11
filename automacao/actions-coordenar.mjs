@@ -56,7 +56,7 @@ const PROVEDORES = {
         model: modelo || MODELO_PADRAO_GITHUB,
         messages: [{ role: "system", content: sistema }, { role: "user", content: usuario }],
         temperature: 0.2,
-        max_tokens: 2000,
+        max_tokens: 4000, // teto de saída do nível gratuito
       }),
       signal: sinal,
     });
@@ -72,17 +72,23 @@ export const MODELO_PADRAO_GITHUB = "openai/gpt-4o-mini";
 /** Alguns modelos embrulham o JSON em ```json ... ```; tira só essa cerca, o resto segue para a validação. */
 export const semCercaDeCodigo = (t) => t.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, "$1").trim();
 
-async function chamarModelo(prompt, cfg) {
+export async function chamarModelo(prompt, cfg) {
   const chamar = PROVEDORES[cfg.provedor];
   if (!chamar) throw new Error(`AI_PROVIDER "${cfg.provedor}" ainda não tem chamada implementada. Informe o provedor para habilitar.`);
   if (!cfg.chave) throw new Error("AI_API_KEY ausente.");
   return chamar(prompt, { modelo: cfg.modelo, baseUrl: cfg.baseUrl, chave: cfg.chave, sinal: AbortSignal.timeout(TIMEOUT_MS) });
 }
 
-export async function coordenar({ env = process.env, entrada }) {
-  if (env.AGENT_DRY_RUN !== "false") return simularRelatorio(entrada);
+/** Configuração do provedor lida do ambiente (a chave só existe nos jobs da IA). */
+export function configDaIA(env = process.env) {
   const cfg = { provedor: env.AI_PROVIDER, modelo: env.AI_MODEL, baseUrl: env.AI_BASE_URL || undefined, chave: env.AI_API_KEY };
   if (cfg.baseUrl && !/^https:\/\//.test(cfg.baseUrl)) throw new Error("AI_BASE_URL precisa ser https.");
+  return cfg;
+}
+
+export async function coordenar({ env = process.env, entrada }) {
+  if (env.AGENT_DRY_RUN !== "false") return simularRelatorio(entrada);
+  const cfg = configDaIA(env);
   const resposta = await chamarModelo(montarPrompt(entrada), cfg); // uma única chamada por execução: nada de repetir às cegas
   return JSON.parse(resposta);
 }

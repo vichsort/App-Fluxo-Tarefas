@@ -43,7 +43,7 @@ export function montarComentarioResultado({ relatorio, resultPath, simulacao }) 
     `- requestId: \`${relatorio.requestId}\``,
     `- resultPath: \`${resultPath}\` (artifact \`resultado-${relatorio.requestId}\`)`,
     relatorio.outcome === "code"
-      ? `- Mudança proposta (nada foi aplicado; abrir o PR ainda não está implementado): ${relatorio.criteria.map((c) => seguro(c.description)).join("; ")}. Arquivos: ${relatorio.allowedFiles.map((f) => `\`${f}\``).join(", ")}`
+      ? `- Mudança proposta (o job de correção tenta aplicá-la e abrir um PR para revisão): ${relatorio.criteria.map((c) => seguro(c.description)).join("; ")}. Arquivos: ${relatorio.allowedFiles.map((f) => `\`${seguro(f)}\``).join(", ")}`
       : null,
     `- Mensagem ao cliente: ${seguro(relatorio.publicText)}`,
     ...relatorio.updates.map((u) => `- ${seguro(u.agent)} (${u.id}): ${seguro(u.internalText)}`),
@@ -120,6 +120,7 @@ export async function publicar(env = process.env) {
     body: montarComentarioResultado({ relatorio, resultPath, simulacao: env.AGENT_DRY_RUN !== "false" }),
   });
   writeFileSync(join(pasta, "resultado.json"), JSON.stringify(relatorio, null, 2)); // artifact; a fonte do estado é o comentário
+  sair(env, "outcome", relatorio.outcome); // `code` (já validado) libera o job de correção
   console.log(`#${dados.issue}: resultado ${relatorio.outcome}${v.ok ? "" : ` (relatório rejeitado: ${v.motivo})`}.`);
 }
 

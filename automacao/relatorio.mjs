@@ -15,7 +15,8 @@ const PERMITIDOS = [
 ];
 
 export function caminhoPermitido(p) {
-  if (typeof p !== "string" || !p || p.includes("\\") || p.includes("\0") || p.startsWith("/")) return false;
+  // Só letras, números, ponto, hífen, sublinhado e barra: nada de espaço, quebra de linha ou `<`/`>` (marcadores).
+  if (typeof p !== "string" || !/^[A-Za-z0-9._/-]{1,200}$/.test(p) || p.startsWith("/")) return false;
   if (p.split("/").some((s) => s === "" || s === "." || s === "..")) return false;
   return PERMITIDOS.some((a) => (a.endsWith("/") ? p.startsWith(a) : p === a));
 }

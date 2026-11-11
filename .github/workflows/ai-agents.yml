@@ -9,6 +9,10 @@ name: ai-agents
 # apenas `models: read`; ele não lê nem escreve issues. Os jobs com escrita na issue nunca recebem a chave da IA.
 # Os jobs trocam entrada.json/saida.json por artifacts desta execução.
 #
+# Correção (outcome `code`, só com AGENT_DRY_RUN=false): `codificar` (models:read, sem escrita) pede as edições à IA,
+# aplica e roda testes e build; `abrir-pr` (escrita, sem IA e sem executar o projeto) revalida, faz commit num branch
+# e abre um PR para a main. Nunca há merge automático. Se algo falhar, `correcao-falhou` registra na issue.
+#
 # O backend dispara este workflow (workflow_dispatch) depois de criar a issue, porque eventos feitos com o
 # GITHUB_TOKEN das Actions não iniciam outros workflows. O evento `issues` fica como reforço: a execução
 # repetida é inofensiva, pois o estado da issue é relido antes de qualquer chamada à IA.
@@ -116,6 +120,8 @@ jobs:
     permissions:
       contents: read
       issues: write
+    outputs:
+      outcome: ${{ steps.publicar.outputs.outcome }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -134,6 +140,7 @@ jobs:
           path: ${{ runner.temp }}/fluxo
 
       - name: Publicar (valida o relatório fora do modelo)
+        id: publicar
         run: node automacao/actions-controlador.mjs publicar
         env:
           REPO: ${{ github.repository }}
@@ -171,6 +178,119 @@ jobs:
 
       - name: Registrar incerteza (a IA pode ou não ter sido chamada)
         run: node automacao/actions-controlador.mjs falhou
+        env:
+          REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  codificar:
+    needs: [preparar, publicar]
+    if: needs.publicar.outputs.outcome == 'code' && vars.AGENT_DRY_RUN == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      models: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: entrada
+          path: ${{ runner.temp }}/fluxo
+      - uses: actions/download-artifact@v4
+        with:
+          name: resultado-${{ needs.preparar.outputs.request_id }}
+          path: ${{ runner.temp }}/fluxo
+      - name: Instalar dependências (antes de qualquer mudança da IA)
+        run: npm ci
+
+      - name: Codificar (uma chamada à IA; token só com models:read)
+        timeout-minutes: 3
+        run: node automacao/correcao.mjs codificar
+        env:
+          AI_PROVIDER: ${{ vars.AI_PROVIDER }}
+          AI_MODEL: ${{ vars.AI_MODEL }}
+          AI_BASE_URL: ${{ vars.AI_BASE_URL }}
+          AI_API_KEY: ${{ vars.AI_PROVIDER == 'github-models' && github.token || secrets.AI_API_KEY }}
+
+      # Enviado ANTES de rodar o código editado pela IA: os testes não conseguem trocar as edições.
+      - name: Guardar as edições validadas
+        uses: actions/upload-artifact@v4
+        with:
+          name: edicoes
+          path: ${{ runner.temp }}/fluxo/edicoes.json
+          retention-days: 1
+          overwrite: true
+
+      - name: Testes (sem credencial no ambiente)
+        run: npm test
+      - name: Build
+        run: npm run build
+
+
+  abrir-pr:
+    needs: [preparar, codificar]
+    if: needs.codificar.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: entrada
+          path: ${{ runner.temp }}/fluxo
+      - uses: actions/download-artifact@v4
+        with:
+          name: resultado-${{ needs.preparar.outputs.request_id }}
+          path: ${{ runner.temp }}/fluxo
+      - uses: actions/download-artifact@v4
+        with:
+          name: edicoes
+          path: ${{ runner.temp }}/fluxo
+
+      - name: Abrir PR para a main (revalida; não executa o projeto; sem merge)
+        run: node automacao/correcao.mjs abrir-pr
+        env:
+          REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  correcao-falhou:
+    needs: [preparar, publicar, codificar, abrir-pr]
+    if: always() && needs.publicar.outputs.outcome == 'code' && vars.AGENT_DRY_RUN == 'false' && needs.abrir-pr.result != 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: entrada
+          path: ${{ runner.temp }}/fluxo
+
+      - name: Registrar que a correção não saiu
+        run: node automacao/correcao.mjs falhou
         env:
           REPO: ${{ github.repository }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

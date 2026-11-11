@@ -10,6 +10,7 @@ import { validarRelatorio } from "../../automacao/relatorio.mjs";
 import { transacao } from "./db.js";
 
 const WORKFLOW = "ai-agents.yml";
+const PRAZO_CORRECAO = 30 * 60_000; // sem PR nem falha registrada em 30 min, a correção é dada como perdida
 
 export const configGithub = () => {
   const runtime = process.env.AGENT_RUNTIME;
@@ -118,9 +119,24 @@ export function aplicarComentarios(db, ticketId, comentarios) {
     if (!v.ok) return console.error(`[github] resultado do ticket ${ticketId} rejeitado: ${v.motivo}`);
     const r = v.relatorio;
     for (const u of r.updates) enviarUmaVez(db, ticketId, `update:${u.id}`, u.publicText);
-    if (r.outcome !== "working") {
-      enviarUmaVez(db, ticketId, `final:${t.request_id}`, r.publicText);
+    if (r.outcome === "working") return;
+    enviarUmaVez(db, ticketId, `final:${t.request_id}`, r.publicText);
+    if (r.outcome !== "code") return void db.prepare("UPDATE ticket SET fase = 'concluido' WHERE id = ?").run(ticketId);
+    // `code`: o job de correção abre um PR (ou registra a falha); seguimos consultando até um dos dois aparecer.
+    const pr = estadosDoRobo(comentarios, "pr").find((e) => e.requestId === t.request_id && /^\d+$/.test(e.number ?? ""));
+    const falhou = estadosDoRobo(comentarios, "correcao").some((e) => e.requestId === t.request_id && e.estado === "falhou");
+    if (pr) {
+      enviarUmaVez(db, ticketId, `pr:${t.request_id}`, "Preparamos uma correção para o seu pedido. Ela será revisada pela equipe e, aprovada, entra no app.");
+      db.prepare("UPDATE ticket SET fase = 'concluido', pr_number = ? WHERE id = ?").run(Number(pr.number), ticketId);
+    } else if (falhou) {
+      enviarUmaVez(db, ticketId, `correcao-falhou:${t.request_id}`, "Não conseguimos aplicar a correção automaticamente. Uma pessoa da equipe vai cuidar do seu pedido.");
       db.prepare("UPDATE ticket SET fase = 'concluido' WHERE id = ?").run(ticketId);
+    } else if (Date.now() - Date.parse(comentarios.filter((c) => c.user?.login === "github-actions[bot]").at(-1)?.created_at ?? Date.now()) > PRAZO_CORRECAO) {
+      // Nenhum marcador depois do prazo: a execução morreu ou foi cancelada. Não deixamos o cliente esperando para sempre.
+      enviarUmaVez(db, ticketId, `correcao-falhou:${t.request_id}`, "Não conseguimos aplicar a correção automaticamente. Uma pessoa da equipe vai cuidar do seu pedido.");
+      db.prepare("UPDATE ticket SET fase = 'concluido' WHERE id = ?").run(ticketId);
+    } else {
+      db.prepare("UPDATE ticket SET fase = 'codigo' WHERE id = ?").run(ticketId);
     }
     return;
   }

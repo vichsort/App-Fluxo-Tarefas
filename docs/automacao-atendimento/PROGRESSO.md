@@ -66,3 +66,12 @@ Substitui o caminho Copilot acima quando `AGENT_RUNTIME=github-actions`. O `nati
 - **Conferido localmente:** chamada simulada ao GitHub Models (`server/test/coordenar.test.js`), `npm test` e `npm run build`. **Não conferido:** o workflow ainda não rodou no GitHub.
 - **Configurar no repositório:** variáveis `AGENT_RUNTIME=github-actions`, `AI_PROVIDER=github-models`, `AGENT_DRY_RUN=true` no ensaio e `false` depois. `AI_API_KEY` não é necessário.
 - **Limite conhecido:** só a primeira mensagem do ticket vai para o atendimento; respostas seguintes no mesmo ticket ainda não disparam nova rodada.
+
+## Etapa 05: correção automática com PR para a main
+
+- **Quando:** o coordenador devolve `outcome: code` e a variável do repositório `AGENT_DRY_RUN` é `false`.
+- **Jobs novos em `ai-agents.yml`:** `codificar` (token só com `contents: read` + `models: read`): segunda chamada à IA (`automacao/correcao.mjs`), que devolve edições de busca e troca; o script valida (só arquivos de `allowedFiles` dentro do escopo de produto, trecho exato e único, sem credencial) e aplica; depois `npm test` e `npm run build` rodam sem credencial. `abrir-pr` (escrita, sem IA e sem executar o projeto): valida de novo, faz commit em `fluxo/correcao-<requestId>`, abre PR para a `main` e comenta `fluxo:pr` na issue. **Nunca há merge automático.** Falhou em qualquer ponto → `correcao-falhou` comenta `fluxo:correcao estado=falhou`.
+- **App:** com `code`, o ticket fica em `fase = 'codigo'` e o backend segue consultando; com o PR, avisa o cliente uma vez (e grava `pr_number`); com falha, avisa que uma pessoa vai cuidar.
+- **Limites:** arquivos que a IA pode editar somam no máximo 16 mil caracteres (nível gratuito do GitHub Models); `estilos.css` sozinho passa disso e cai em falha → pessoa. Não cria arquivos novos.
+- **Configuração:** Settings → Actions → General → Workflow permissions → "Allow GitHub Actions to create and approve pull requests".
+- **PRs abertos pelo `GITHUB_TOKEN` não disparam outros workflows** (regra do GitHub); os testes rodam no próprio job `codificar`.
