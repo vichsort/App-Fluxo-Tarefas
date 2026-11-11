@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "./api.js";
 import { BarraLateral } from "./BarraLateral.jsx";
+import { TelaAtendimento, useAtendimento } from "./Atendimento.jsx";
 import { TelaQuadro } from "./TelaQuadro.jsx";
 import { Botao } from "./componentes/Botao.jsx";
 import { Campo } from "./componentes/Campo.jsx";
@@ -36,7 +37,11 @@ function EstadoVazio({ titulo, descricao, children }) {
   );
 }
 
+const telaDoEndereco = () => (window.location.hash === "#atendimento" ? "atendimento" : "quadros");
+
 export function App() {
+  const [tela, setTela] = useState(telaDoEndereco);
+  const atendimento = useAtendimento(tela === "atendimento");
   const [quadros, setQuadros] = useState(null);
   const [quadroId, setQuadroId] = useState(null);
   const [detalhe, setDetalhe] = useState(null);
@@ -88,6 +93,19 @@ export function App() {
   }, [quadroId, tentativa]);
 
   const recarregar = () => setTentativa((t) => t + 1);
+
+  const trocarTela = (nova) => {
+    setTela(nova);
+    window.history.replaceState(null, "", nova === "atendimento" ? "#atendimento" : window.location.pathname);
+  };
+
+  const renomearTicket = async (title) => {
+    if (await atendimento.renomear(title)) setDialogo(null);
+  };
+
+  const excluirTicket = async () => {
+    if (await atendimento.excluir()) setDialogo(null);
+  };
 
   const executar = async (acao, aoTerminar) => {
     try {
@@ -256,6 +274,9 @@ export function App() {
   return (
     <div className="app">
       <BarraLateral
+        tela={tela}
+        aoTrocarTela={trocarTela}
+        atendimento={atendimento}
         quadros={quadros}
         quadroId={quadroId}
         aoSelecionar={setQuadroId}
@@ -265,17 +286,23 @@ export function App() {
       />
 
       <main className="canvas">
-        {erro ? (
+        {(tela === "atendimento" ? atendimento.erro : erro) ? (
           <div className="aviso" role="alert">
             <span className="aviso-texto">
               <Icone nome="alerta" tamanho={18} />
-              <span>{erro}</span>
+              <span>{tela === "atendimento" ? atendimento.erro : erro}</span>
             </span>
-            <Botao icone="atualizar" onClick={recarregar}>Tentar de novo</Botao>
+            <Botao icone="atualizar" onClick={tela === "atendimento" ? atendimento.recarregar : recarregar}>Tentar de novo</Botao>
           </div>
         ) : null}
 
-        {conteudo()}
+        {tela === "atendimento" ? (
+          <TelaAtendimento
+            atendimento={atendimento}
+            aoRenomear={(ticket) => setDialogo({ tipo: "renomear-ticket", ticket })}
+            aoExcluir={(ticket) => setDialogo({ tipo: "excluir-ticket", ticket })}
+          />
+        ) : conteudo()}
       </main>
 
       {dialogo?.tipo === "novo-quadro" ? (
@@ -377,6 +404,36 @@ export function App() {
             </div>
           </form>
         </Dialogo>
+      ) : null}
+
+      {dialogo?.tipo === "renomear-ticket" ? (
+        <Dialogo aberto titulo="Renomear ticket" aoFechar={() => setDialogo(null)}>
+          <form
+            className="formulario"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const titulo = String(new FormData(e.currentTarget).get("title") ?? "").trim();
+              if (titulo) void renomearTicket(titulo);
+            }}
+          >
+            <Campo rotulo="Título do ticket" name="title" defaultValue={dialogo.ticket.title} maxLength={120} required autoFocus />
+            <div className="acoes">
+              <Botao onClick={() => setDialogo(null)}>Cancelar</Botao>
+              <Botao variante="primario" type="submit">Salvar alterações</Botao>
+            </div>
+          </form>
+        </Dialogo>
+      ) : null}
+
+      {dialogo?.tipo === "excluir-ticket" ? (
+        <Confirmar
+          aberto
+          titulo="Excluir ticket"
+          descricao={`Excluir "${dialogo.ticket.title}" apaga toda a conversa. Não dá para desfazer.`}
+          rotuloConfirmar="Excluir ticket"
+          aoConfirmar={() => void excluirTicket()}
+          aoFechar={() => setDialogo(null)}
+        />
       ) : null}
 
       {dialogo?.tipo === "excluir-cartao" ? (

@@ -58,6 +58,26 @@ const MIGRACOES = [
      ('card-api', 'list-fazendo', 'Montar a API de quadros', 'Boards, listas e cartões com movimentação entre listas.', 0),
      ('card-paleta', 'list-pronto', 'Escolher a paleta de cores', '', 0),
      ('card-metricas', 'list-backlog', 'Medir tempo por cartão', '', 0);`,
+  // Atendimento: cada ticket é uma conversa; `role` diz quem escreveu (user, agent ou system).
+  `CREATE TABLE ticket (
+     id TEXT PRIMARY KEY,
+     title TEXT NOT NULL,
+     status TEXT NOT NULL DEFAULT 'open',
+     criado_em TEXT NOT NULL,
+     atualizado_em TEXT NOT NULL
+   );
+   CREATE TABLE ticket_message (
+     id TEXT PRIMARY KEY,
+     ticket_id TEXT NOT NULL REFERENCES ticket(id) ON DELETE CASCADE,
+     role TEXT NOT NULL,
+     content TEXT NOT NULL,
+     criado_em TEXT NOT NULL
+   );
+   INSERT INTO ticket (id, title, status, criado_em, atualizado_em) VALUES
+     ('ticket-boas-vindas', 'Como funciona o atendimento?', 'open', '2026-11-10T10:00:00.000Z', '2026-11-10T10:00:05.000Z');
+   INSERT INTO ticket_message (id, ticket_id, role, content, criado_em) VALUES
+     ('msg-boas-vindas-1', 'ticket-boas-vindas', 'user', 'Oi! Como eu peço ajuda aqui dentro do Fluxo?', '2026-11-10T10:00:00.000Z'),
+     ('msg-boas-vindas-2', 'ticket-boas-vindas', 'agent', 'Olá! Cada ticket é uma conversa. Abra um novo ticket pelo botão "Novo ticket", descreva o que precisa e continue a conversa por aqui.', '2026-11-10T10:00:05.000Z');`,
 ];
 
 /** `caminho` = arquivo do banco; `:memory:` nos testes. */

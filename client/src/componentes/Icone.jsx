@@ -88,6 +88,30 @@ const DESENHOS = {
       <path d="M20 3v6h-6" />
     </>
   ),
+  chat: <path d="M21 12a8 8 0 0 1-11.7 7.1L3 20.5l1.4-5.1A8 8 0 1 1 21 12Z" />,
+  enviar: (
+    <>
+      <path d="M12 19V5" />
+      <path d="m5 12 7-7 7 7" />
+    </>
+  ),
+  suporte: (
+    <>
+      <path d="M4 14v-2a8 8 0 0 1 16 0v2" />
+      <path d="M4 14h2.5a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z" />
+      <path d="M20 14h-2.5a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1H19a1 1 0 0 0 1-1Z" />
+    </>
+  ),
+  robo: (
+    <>
+      <rect x="4" y="8" width="16" height="11" rx="3" />
+      <path d="M12 8V4.5" />
+      <circle cx="12" cy="3.5" r="1" />
+      <path d="M9 13.5h.01" />
+      <path d="M15 13.5h.01" />
+    </>
+  ),
+  check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
 };
 
 export function Icone({ nome, tamanho = 18, rotulo, className = "", ...resto }) {
