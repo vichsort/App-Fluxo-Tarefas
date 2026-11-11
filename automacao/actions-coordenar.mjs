@@ -5,7 +5,9 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const TIMEOUT_MS = 90_000; // e uma só chamada ao modelo por execução
+const TIMEOUT_MS = 35_000; // por tentativa; 4 tentativas + esperas cabem nos 3 min do passo
+const TENTATIVAS = 4;
+const ESPERA_MS = (n) => 2000 * 2 ** n; // 2 s, 4 s, 8 s
 
 const corpoDoAgente = (arquivo) => readFileSync(arquivo, "utf8").replace(/^---[\s\S]*?\n---\n/, "").trim();
 
@@ -62,7 +64,7 @@ const PROVEDORES = {
       }),
       signal: sinal,
     });
-    if (!r.ok) throw new Error(`Gemini respondeu ${r.status}`); // sem chave nem corpo na mensagem
+    if (!r.ok) throw Object.assign(new Error(`Gemini respondeu ${r.status}`), { status: r.status }); // sem chave nem corpo na mensagem
     const partes = (await r.json())?.candidates?.[0]?.content?.parts;
     const texto = Array.isArray(partes) ? partes.map((p) => p?.text ?? "").join("") : "";
     if (!texto) throw new Error("Gemini não devolveu texto.");
@@ -79,7 +81,17 @@ export async function chamarModelo(prompt, cfg) {
   const chamar = PROVEDORES[cfg.provedor];
   if (!chamar) throw new Error(`AI_PROVIDER "${cfg.provedor}" ainda não tem chamada implementada. Informe o provedor para habilitar.`);
   if (!cfg.chave) throw new Error("AI_API_KEY ausente.");
-  return chamar(prompt, { modelo: cfg.modelo, baseUrl: cfg.baseUrl, chave: cfg.chave, sinal: AbortSignal.timeout(TIMEOUT_MS) });
+  // 429/5xx (ex.: 503 de sobrecarga do Gemini) são recusas antes de processar: repetir é seguro e não gasta resposta.
+  // Qualquer outro erro (ou timeout, que pode ter sido consumido) sobe na hora, sem repetir às cegas.
+  for (let n = 0; ; n++) {
+    try {
+      return await chamar(prompt, { modelo: cfg.modelo, baseUrl: cfg.baseUrl, chave: cfg.chave, sinal: AbortSignal.timeout(TIMEOUT_MS) });
+    } catch (e) {
+      if (![429, 500, 502, 503, 504].includes(e.status) || n >= TENTATIVAS - 1) throw e;
+      console.error(`${e.message}; nova tentativa ${n + 2}/${TENTATIVAS}`);
+      await new Promise((ok) => setTimeout(ok, ESPERA_MS(n)));
+    }
+  }
 }
 
 /** Configuração do provedor lida do ambiente (a chave só existe nos jobs da IA). */
@@ -92,7 +104,7 @@ export function configDaIA(env = process.env) {
 export async function coordenar({ env = process.env, entrada }) {
   if (env.AGENT_DRY_RUN !== "false") return simularRelatorio(entrada);
   const cfg = configDaIA(env);
-  const resposta = await chamarModelo(montarPrompt(entrada), cfg); // uma única chamada por execução: nada de repetir às cegas
+  const resposta = await chamarModelo(montarPrompt(entrada), cfg); // repete só 429/5xx (ver chamarModelo)
   return JSON.parse(resposta);
 }
 
