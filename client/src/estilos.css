@@ -47,6 +47,26 @@
   color-scheme: light;
 }
 
+:root[data-tema="escuro"] {
+  --oceano: #3b82f6;
+  --oceano-escuro: #2563eb;
+  --oceano-fraco: #1e3a8a;
+  --noite: #f8fafc;
+  --fundo: #0f172a;
+  --superficie: #1e293b;
+  --superficie-vidro: rgb(30 41 59 / 75%);
+  --texto: #f1f5f9;
+  --secundario: #94a3b8;
+  --borda: #334155;
+  --borda-forte: #475569;
+  --perigo: #ef4444;
+  --perigo-fraco: rgb(239 68 68 / 15%);
+  --sombra-1: 0 1px 2px rgb(0 0 0 / 40%);
+  --sombra-2: 0 2px 6px rgb(0 0 0 / 50%), 0 10px 24px rgb(0 0 0 / 40%);
+  --sombra-3: 0 18px 40px rgb(0 0 0 / 60%);
+  color-scheme: dark;
+}
+
 * { box-sizing: border-box; }
 
 body {
