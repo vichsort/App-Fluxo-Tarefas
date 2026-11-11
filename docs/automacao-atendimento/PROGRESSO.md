@@ -75,3 +75,10 @@ Substitui o caminho Copilot acima quando `AGENT_RUNTIME=github-actions`. O `nati
 - **Limites:** arquivos que a IA pode editar somam no máximo 16 mil caracteres (nível gratuito do GitHub Models); `estilos.css` sozinho passa disso e cai em falha → pessoa. Não cria arquivos novos.
 - **Configuração:** Settings → Actions → General → Workflow permissions → "Allow GitHub Actions to create and approve pull requests".
 - **PRs abertos pelo `GITHUB_TOKEN` não disparam outros workflows** (regra do GitHub); os testes rodam no próprio job `codificar`.
+
+## Etapa 06: troca do GitHub Models pelo Gemini
+
+- **Motivo:** o GitHub Models foi desativado em 30/07/2026 (changelog do GitHub). O endereço ainda responde `200 OK` em texto puro, sem chamar modelo nenhum; o ensaio real falhou no `coordenar` com "OK is not valid JSON".
+- **Agora:** `AI_PROVIDER=gemini` (API `generateContent`, modelo padrão `gemini-flash-lite-latest`, trocável por `AI_MODEL`). Chave do Google AI Studio no segredo `AI_API_KEY`, que só entra em `coordenar` e `codificar` (ambos só com `contents: read`). O provedor `github-models` foi removido.
+- **Limite de arquivos da correção:** 60 mil caracteres (o `estilos.css` agora cabe).
+- **Configurar:** secret `AI_API_KEY`; variável `AI_PROVIDER=gemini`.

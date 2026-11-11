@@ -1,5 +1,5 @@
 // Correção automática (outcome `code`) do workflow ai-agents.yml. Dois comandos, cada um num job separado:
-//   codificar - job com `contents: read` + `models: read`: uma chamada à IA, que devolve edições de busca e troca;
+//   codificar - job só com `contents: read` (e AI_API_KEY): uma chamada à IA, que devolve edições de busca e troca;
 //               valida e aplica no checkout. Os testes e o build rodam nos passos seguintes do mesmo job, sem credencial.
 //   abrir-pr  - job com escrita: valida as edições DE NOVO, aplica, faz commit num branch e abre um PR para a main.
 //               Nunca executa código do projeto (sem npm) e nunca faz merge: uma pessoa revisa o PR.
@@ -12,7 +12,7 @@ import { chamarModelo, configDaIA } from "./actions-coordenar.mjs";
 import { estadosDoRobo, marcador } from "./protocolo.mjs";
 import { caminhoPermitido, contemSegredo, limpar } from "./relatorio.mjs";
 
-export const MAX_ENTRADA = 16_000; // caracteres dos arquivos no prompt: o nível gratuito aceita ~8 mil tokens de entrada
+export const MAX_ENTRADA = 60_000; // caracteres dos arquivos no prompt (cabe estilos.css; o Gemini aceita bem mais)
 const MAX_EDICOES = 10;
 
 const corpoDoAgente = (raiz) =>

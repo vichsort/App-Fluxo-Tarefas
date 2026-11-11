@@ -3,13 +3,13 @@ name: ai-agents
 # Atendimento via GitHub Actions com a API de IA do próprio dono do repositório (sem Copilot).
 # Liga com a variável de repositório AGENT_RUNTIME=github-actions. AGENT_DRY_RUN (variável) fica "true"
 # até o ensaio: simula o coordenador sem chamar a IA. Roda sempre a partir da main e nunca executa código
-# de PR nem código gerado. AI_API_KEY só existe no job que chama o provedor.
+# de PR. Código gerado pela IA só roda (testes e build) no job `codificar`, sem credencial do GitHub com escrita.
 #
-# AI_PROVIDER=github-models (gratuito, sem segredo): o job `coordenar` usa o próprio GITHUB_TOKEN, mas com
-# apenas `models: read`; ele não lê nem escreve issues. Os jobs com escrita na issue nunca recebem a chave da IA.
+# AI_PROVIDER=gemini (nível gratuito do Google AI Studio): chave no segredo AI_API_KEY. Ela só entra nos jobs
+# `coordenar` e `codificar`, que têm apenas `contents: read`; os jobs com escrita na issue nunca recebem a chave.
 # Os jobs trocam entrada.json/saida.json por artifacts desta execução.
 #
-# Correção (outcome `code`, só com AGENT_DRY_RUN=false): `codificar` (models:read, sem escrita) pede as edições à IA,
+# Correção (outcome `code`, só com AGENT_DRY_RUN=false): `codificar` (só leitura, com a chave da IA) pede as edições à IA,
 # aplica e roda testes e build; `abrir-pr` (escrita, sem IA e sem executar o projeto) revalida, faz commit num branch
 # e abre um PR para a main. Nunca há merge automático. Se algo falhar, `correcao-falhou` registra na issue.
 #
@@ -81,7 +81,6 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
-      models: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -95,7 +94,7 @@ jobs:
           name: entrada
           path: ${{ runner.temp }}/fluxo
 
-      - name: Coordenar (única chamada à IA; token só com models:read)
+      - name: Coordenar (única chamada à IA; sem credencial do GitHub)
         timeout-minutes: 3
         run: node automacao/actions-coordenar.mjs
         env:
@@ -103,7 +102,7 @@ jobs:
           AI_PROVIDER: ${{ vars.AI_PROVIDER }}
           AI_MODEL: ${{ vars.AI_MODEL }}
           AI_BASE_URL: ${{ vars.AI_BASE_URL }}
-          AI_API_KEY: ${{ vars.AI_PROVIDER == 'github-models' && github.token || secrets.AI_API_KEY }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -189,7 +188,6 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-      models: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -209,14 +207,14 @@ jobs:
       - name: Instalar dependências (antes de qualquer mudança da IA)
         run: npm ci
 
-      - name: Codificar (uma chamada à IA; token só com models:read)
+      - name: Codificar (uma chamada à IA; sem credencial do GitHub)
         timeout-minutes: 3
         run: node automacao/correcao.mjs codificar
         env:
           AI_PROVIDER: ${{ vars.AI_PROVIDER }}
           AI_MODEL: ${{ vars.AI_MODEL }}
           AI_BASE_URL: ${{ vars.AI_BASE_URL }}
-          AI_API_KEY: ${{ vars.AI_PROVIDER == 'github-models' && github.token || secrets.AI_API_KEY }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
 
       # Enviado ANTES de rodar o código editado pela IA: os testes não conseguem trocar as edições.
       - name: Guardar as edições validadas
